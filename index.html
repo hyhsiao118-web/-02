@@ -1,374 +1,348 @@
-import React, { useState, useMemo } from 'react';
-import { 
-  Plus, 
-  Trash2, 
-  Utensils, 
-  TrainFront, 
-  ShoppingBag, 
-  Ticket, 
-  BedDouble, 
-  JapaneseYen, 
-  Settings,
-  MapPin,
-  Camera,
-  Wallet,
-  User
-} from 'lucide-react';
-
-const KyotoExpenseTracker = () => {
-  // 基礎設定
-  const [exchangeRate, setExchangeRate] = useState(0.215);
-  const [initialBudget, setInitialBudget] = useState(100000); // 媽媽給的公費
-  const [showSettings, setShowSettings] = useState(false);
-  
-  // 行程日期對照表
-  const itineraryDates = [
-    { date: '2/8', day: 'Sun', location: '抵達京都', detail: '素居旅舍 / 關西機場' },
-    { date: '2/9', day: 'Mon', location: '伏見宇治', detail: '十石舟 / 平等院' },
-    { date: '2/10', day: 'Tue', location: '京都市區', detail: '清水寺 / 鴨川騎行' },
-    { date: '2/11', day: 'Wed', location: '美山自駕', detail: '茅草屋之里 / 租車' },
-    { date: '2/12', day: 'Thu', location: '嵐山大阪', detail: '嵐山 / 移動日' },
-    { date: '2/13', day: 'Fri', location: '姬路大阪', detail: '姬路城 / 心齋橋' },
-    { date: '2/14', day: 'Sat', location: '臨空城返台', detail: 'Outlets / 關西機場' },
-  ];
-
-  const [selectedDateIndex, setSelectedDateIndex] = useState(0);
-  
-  // 支出資料 (增加 type 欄位: 'public' 或 'private')
-  const [expenses, setExpenses] = useState([
-    { id: 1, date: '2/8', item: '利木津巴士', amount: 2600, category: 'transport', type: 'public' },
-    { id: 2, date: '2/8', item: '拉麵小路午餐', amount: 1200, category: 'food', type: 'public' },
-    { id: 3, date: '2/8', item: '超商買零食(私)', amount: 500, category: 'food', type: 'private' },
-  ]);
-
-  // 新增支出的狀態
-  const [newItem, setNewItem] = useState('');
-  const [newAmount, setNewAmount] = useState('');
-  const [newCategory, setNewCategory] = useState('food');
-  const [isPersonal, setIsPersonal] = useState(false); // 預設為公費
-  const [isAdding, setIsAdding] = useState(false);
-
-  const categories = [
-    { id: 'food', label: '飲食', icon: <Utensils size={18} />, color: 'bg-orange-100 text-orange-600' },
-    { id: 'transport', label: '交通', icon: <TrainFront size={18} />, color: 'bg-blue-100 text-blue-600' },
-    { id: 'shopping', label: '購物', icon: <ShoppingBag size={18} />, color: 'bg-pink-100 text-pink-600' },
-    { id: 'ticket', label: '門票', icon: <Ticket size={18} />, color: 'bg-purple-100 text-purple-600' },
-    { id: 'hotel', label: '住宿', icon: <BedDouble size={18} />, color: 'bg-indigo-100 text-indigo-600' },
-    { id: 'other', label: '其他', icon: <Camera size={18} />, color: 'bg-gray-100 text-gray-600' },
-  ];
-
-  // 計算邏輯
-  const stats = useMemo(() => {
-    const publicSpent = expenses
-      .filter(e => e.type === 'public')
-      .reduce((sum, item) => sum + Number(item.amount), 0);
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>京都之旅公費記帳本</title>
     
-    const privateSpent = expenses
-      .filter(e => e.type === 'private')
-      .reduce((sum, item) => sum + Number(item.amount), 0);
+    <!-- 1. 載入 Tailwind CSS (樣式庫) -->
+    <script src="https://cdn.tailwindcss.com"></script>
 
-    return {
-      publicSpent,
-      privateSpent,
-      remaining: initialBudget - publicSpent
-    };
-  }, [expenses, initialBudget]);
+    <!-- 2. 載入 React 和 Babel (核心運作庫) -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-  const currentDayExpenses = useMemo(() => {
-    return expenses.filter(item => item.date === itineraryDates[selectedDateIndex].date);
-  }, [expenses, selectedDateIndex]);
+    <!-- 3. 樣式優化與列印設定 -->
+    <style>
+        body { -webkit-tap-highlight-color: transparent; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        /* 列印模式設定 (轉 PDF 用) */
+        @media print {
+            .no-print { display: none !important; } /* 隱藏按鈕、輸入框 */
+            .print-only { display: block !important; } /* 顯示報表頭 */
+            body { background: white; color: black; }
+            .print-container { height: auto !important; overflow: visible !important; }
+            .expense-card { border: 1px solid #ddd; box-shadow: none; break-inside: avoid; margin-bottom: 10px; }
+            .print-header { margin-bottom: 20px; border-bottom: 2px solid #333; padding-bottom: 10px; }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-slate-800">
 
-  const currentDayTotal = useMemo(() => {
-    return currentDayExpenses.reduce((sum, item) => sum + Number(item.amount), 0);
-  }, [currentDayExpenses]);
+    <div id="root"></div>
 
-  const handleAddExpense = (e) => {
-    e.preventDefault();
-    if (!newItem || !newAmount) return;
+    <script type="text/babel">
+        const { useState, useMemo, useEffect } = React;
 
-    const newExpense = {
-      id: Date.now(),
-      date: itineraryDates[selectedDateIndex].date,
-      item: newItem,
-      amount: parseFloat(newAmount),
-      category: newCategory,
-      type: isPersonal ? 'private' : 'public'
-    };
+        // --- SVG 圖示組件 (避免外部依賴) ---
+        const Icon = ({ children, className }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                {children}
+            </svg>
+        );
 
-    setExpenses([newExpense, ...expenses]);
-    setNewItem('');
-    setNewAmount('');
-    setIsAdding(false);
-    // 不重置 isPersonal，方便連續輸入同類型
-  };
+        const Icons = {
+            Plus: () => <Icon className="w-6 h-6"><path d="M5 12h14"/><path d="M12 5v14"/></Icon>,
+            Trash: () => <Icon className="w-5 h-5"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></Icon>,
+            Utensils: () => <Icon className="w-5 h-5"><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2v0a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/></Icon>,
+            Train: () => <Icon className="w-5 h-5"><path d="M8 3.1V7a4 4 0 0 0 8 0V3.1M2 8h20M9 15h6M6 19v2M18 19v2"/><rect x="2" y="8" width="20" height="11" rx="4"/></Icon>,
+            Shopping: () => <Icon className="w-5 h-5"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></Icon>,
+            Ticket: () => <Icon className="w-5 h-5"><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M13 5v2"/><path d="M13 17v2"/><path d="M13 11v2"/></Icon>,
+            Hotel: () => <Icon className="w-5 h-5"><path d="M2 20v-8a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v8"/><path d="M4 10V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v4"/><path d="M12 4v6"/><path d="M2 18h20"/></Icon>,
+            Camera: () => <Icon className="w-5 h-5"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></Icon>,
+            Settings: () => <Icon className="w-5 h-5"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.47a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></Icon>,
+            MapPin: () => <Icon className="w-3 h-3"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></Icon>,
+            Wallet: () => <Icon className="w-32 h-32"><path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/></Icon>,
+            User: () => <Icon className="w-3 h-3"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></Icon>,
+            Download: () => <Icon className="w-4 h-4"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></Icon>,
+            Printer: () => <Icon className="w-4 h-4"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></Icon>
+        };
 
-  const handleDelete = (id) => {
-    setExpenses(expenses.filter(item => item.id !== id));
-  };
-
-  const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('ja-JP').format(amount);
-  };
-
-  return (
-    <div className="max-w-md mx-auto h-screen bg-gray-50 flex flex-col font-sans text-slate-800">
-      
-      {/* 頂部總覽區 */}
-      <div className="bg-slate-900 text-white p-6 rounded-b-3xl shadow-lg z-10 relative overflow-hidden">
-        {/* 背景裝飾 */}
-        <div className="absolute top-0 right-0 p-4 opacity-10">
-          <Wallet size={100} />
-        </div>
-
-        <div className="flex justify-between items-start mb-6 relative z-10">
-          <div className="w-full">
-            <div className="flex justify-between items-center">
-              <h1 className="text-xs text-amber-400 font-bold tracking-widest uppercase mb-1">Public Fund Balance</h1>
-              <button onClick={() => setShowSettings(!showSettings)} className="text-slate-400 hover:text-white">
-                <Settings size={16} />
-              </button>
-            </div>
+        const App = () => {
+            // 讀取/初始化設定
+            const [exchangeRate, setExchangeRate] = useState(() => parseFloat(localStorage.getItem('kyoto_exchangeRate')) || 0.215);
+            const [initialBudget, setInitialBudget] = useState(() => parseFloat(localStorage.getItem('kyoto_initialBudget')) || 100000);
             
-            {/* 公費餘額大字顯示 */}
-            <div className="flex items-baseline gap-2">
-              <span className={`text-4xl font-bold ${stats.remaining < 0 ? 'text-red-400' : 'text-white'}`}>
-                ¥ {formatCurrency(stats.remaining)}
-              </span>
-              <span className="text-slate-400 text-xs">
-                / ¥{formatCurrency(initialBudget)}
-              </span>
-            </div>
-            <div className="text-xs text-slate-400 mt-1">
-              剩餘約 NT$ {formatCurrency(Math.round(stats.remaining * exchangeRate))}
-            </div>
+            const defaultExpenses = [
+                { id: 1, date: '2/8', item: '利木津巴士', amount: 2600, category: 'transport', type: 'public' },
+                { id: 2, date: '2/8', item: '拉麵小路午餐', amount: 1200, category: 'food', type: 'public' },
+                { id: 3, date: '2/8', item: '超商買零食(私)', amount: 500, category: 'food', type: 'private' },
+            ];
 
-            {/* 私人支出小字顯示 */}
-            <div className="mt-4 pt-3 border-t border-slate-700 flex justify-between items-center">
-              <div className="flex items-center gap-2 text-pink-300">
-                <User size={14} />
-                <span className="text-sm font-medium">個人總支出</span>
-              </div>
-              <span className="text-lg font-bold text-pink-300">¥ {formatCurrency(stats.privateSpent)}</span>
-            </div>
-          </div>
-        </div>
+            const [expenses, setExpenses] = useState(() => {
+                const saved = localStorage.getItem('kyoto_expenses');
+                return saved ? JSON.parse(saved) : defaultExpenses;
+            });
 
-        {/* 設定面板 */}
-        {showSettings && (
-          <div className="bg-slate-800 p-4 rounded-xl mb-4 text-sm animate-in fade-in slide-in-from-top-2 border border-slate-700">
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <label className="text-slate-300">初始公費預算 (JPY)</label>
-                <input 
-                  type="number" 
-                  value={initialBudget} 
-                  onChange={(e) => setInitialBudget(Number(e.target.value))}
-                  className="w-24 p-1 bg-slate-700 text-white rounded text-center border border-slate-600"
-                />
-              </div>
-              <div className="flex items-center justify-between">
-                <label className="text-slate-300">匯率 (JPY to TWD)</label>
-                <input 
-                  type="number" 
-                  step="0.001"
-                  value={exchangeRate} 
-                  onChange={(e) => setExchangeRate(e.target.value)}
-                  className="w-24 p-1 bg-slate-700 text-white rounded text-center border border-slate-600"
-                />
-              </div>
-            </div>
-          </div>
-        )}
+            // UI 狀態
+            const [showSettings, setShowSettings] = useState(false);
+            const [selectedDateIndex, setSelectedDateIndex] = useState(0);
+            const [isAdding, setIsAdding] = useState(false);
 
-        {/* 日期選擇器 */}
-        <div className="flex overflow-x-auto pb-2 gap-3 no-scrollbar snap-x pt-2">
-          {itineraryDates.map((day, index) => (
-            <button
-              key={index}
-              onClick={() => setSelectedDateIndex(index)}
-              className={`flex-shrink-0 snap-start flex flex-col items-center justify-center p-2 w-16 rounded-xl transition-all border-2 ${
-                selectedDateIndex === index 
-                  ? 'bg-amber-400 border-amber-400 text-slate-900 shadow-lg translate-y-1' 
-                  : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700'
-              }`}
-            >
-              <span className="text-xs font-bold">{day.date}</span>
-              <span className="text-[10px] opacity-80">{day.day}</span>
-            </button>
-          ))}
-        </div>
-      </div>
+            // 表單狀態
+            const [newItem, setNewItem] = useState('');
+            const [newAmount, setNewAmount] = useState('');
+            const [newCategory, setNewCategory] = useState('food');
+            const [isPersonal, setIsPersonal] = useState(false);
 
-      {/* 主要內容區 */}
-      <div className="flex-1 overflow-y-auto p-4 pb-32">
-        <div className="flex items-center justify-between mb-4 px-1">
-          <div>
-            <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-              {itineraryDates[selectedDateIndex].location}
-            </h2>
-            <p className="text-slate-500 text-xs flex items-center gap-1">
-              <MapPin size={10} />
-              {itineraryDates[selectedDateIndex].detail}
-            </p>
-          </div>
-          <div className="text-right">
-            <div className="text-[10px] text-slate-500 uppercase tracking-wide">Day Total</div>
-            <div className="font-bold text-slate-700">¥ {formatCurrency(currentDayTotal)}</div>
-          </div>
-        </div>
+            // 存檔副作用
+            useEffect(() => {
+                localStorage.setItem('kyoto_exchangeRate', exchangeRate);
+                localStorage.setItem('kyoto_initialBudget', initialBudget);
+                localStorage.setItem('kyoto_expenses', JSON.stringify(expenses));
+            }, [exchangeRate, initialBudget, expenses]);
 
-        <div className="space-y-3">
-          {currentDayExpenses.length === 0 ? (
-            <div className="text-center py-12 text-slate-400 bg-white rounded-2xl border border-dashed border-slate-200">
-              <p>本日尚未有支出</p>
-            </div>
-          ) : (
-            currentDayExpenses.map((expense) => {
-              const cat = categories.find(c => c.id === expense.category);
-              const isPrivate = expense.type === 'private';
-              return (
-                <div key={expense.id} className={`p-4 rounded-2xl shadow-sm border flex items-center justify-between group relative overflow-hidden ${isPrivate ? 'bg-pink-50 border-pink-100' : 'bg-white border-slate-100'}`}>
-                  {/* 私人標籤 */}
-                  {isPrivate && (
-                    <div className="absolute top-0 right-0 bg-pink-200 text-pink-700 text-[9px] px-2 py-0.5 rounded-bl-lg font-bold">
-                      個人
+            const itineraryDates = [
+                { date: '2/8', day: 'Sun', location: '抵達京都', detail: '素居旅舍 / 關西機場' },
+                { date: '2/9', day: 'Mon', location: '伏見宇治', detail: '十石舟 / 平等院' },
+                { date: '2/10', day: 'Tue', location: '京都市區', detail: '清水寺 / 鴨川騎行' },
+                { date: '2/11', day: 'Wed', location: '美山自駕', detail: '茅草屋之里 / 租車' },
+                { date: '2/12', day: 'Thu', location: '嵐山大阪', detail: '嵐山 / 移動日' },
+                { date: '2/13', day: 'Fri', location: '姬路大阪', detail: '姬路城 / 心齋橋' },
+                { date: '2/14', day: 'Sat', location: '臨空城返台', detail: 'Outlets / 關西機場' },
+            ];
+
+            const categories = [
+                { id: 'food', label: '飲食', icon: <Icons.Utensils />, color: 'bg-orange-100 text-orange-600' },
+                { id: 'transport', label: '交通', icon: <Icons.Train />, color: 'bg-blue-100 text-blue-600' },
+                { id: 'shopping', label: '購物', icon: <Icons.Shopping />, color: 'bg-pink-100 text-pink-600' },
+                { id: 'ticket', label: '門票', icon: <Icons.Ticket />, color: 'bg-purple-100 text-purple-600' },
+                { id: 'hotel', label: '住宿', icon: <Icons.Hotel />, color: 'bg-indigo-100 text-indigo-600' },
+                { id: 'other', label: '其他', icon: <Icons.Camera />, color: 'bg-gray-100 text-gray-600' },
+            ];
+
+            // 統計
+            const stats = useMemo(() => {
+                const publicSpent = expenses.filter(e => e.type === 'public').reduce((sum, item) => sum + Number(item.amount), 0);
+                const privateSpent = expenses.filter(e => e.type === 'private').reduce((sum, item) => sum + Number(item.amount), 0);
+                return { publicSpent, privateSpent, remaining: initialBudget - publicSpent };
+            }, [expenses, initialBudget]);
+
+            const currentDayExpenses = useMemo(() => expenses.filter(item => item.date === itineraryDates[selectedDateIndex].date), [expenses, selectedDateIndex]);
+            const currentDayTotal = useMemo(() => currentDayExpenses.reduce((sum, item) => sum + Number(item.amount), 0), [currentDayExpenses]);
+
+            // --- 功能區 ---
+
+            const handleAddExpense = (e) => {
+                e.preventDefault();
+                if (!newItem || !newAmount) return;
+                const newExpense = {
+                    id: Date.now(),
+                    date: itineraryDates[selectedDateIndex].date,
+                    item: newItem,
+                    amount: parseFloat(newAmount),
+                    category: newCategory,
+                    type: isPersonal ? 'private' : 'public'
+                };
+                setExpenses([newExpense, ...expenses]);
+                setNewItem('');
+                setNewAmount('');
+                setIsAdding(false);
+            };
+
+            const handleDelete = (id) => {
+                if(confirm('確定要刪除這筆紀錄嗎？')) setExpenses(expenses.filter(item => item.id !== id));
+            };
+
+            const formatCurrency = (amount) => new Intl.NumberFormat('ja-JP').format(amount);
+
+            // 匯出 CSV (Excel)
+            const exportToExcel = () => {
+                // 加入 BOM \uFEFF 讓 Excel 能正確識別中文編碼
+                let csvContent = "\uFEFF日期,項目,金額(JPY),換算(TWD),類型,分類\n";
+                expenses.forEach(e => {
+                    const catName = categories.find(c => c.id === e.category)?.label || e.category;
+                    const typeName = e.type === 'public' ? '公費' : '個人';
+                    const twd = Math.round(e.amount * exchangeRate);
+                    // 確保逗號不會破壞格式
+                    const safeItem = `"${e.item.replace(/"/g, '""')}"`; 
+                    csvContent += `${e.date},${safeItem},${e.amount},${twd},${typeName},${catName}\n`;
+                });
+
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement("a");
+                const url = URL.createObjectURL(blob);
+                link.setAttribute("href", url);
+                link.setAttribute("download", "京都之旅支出表.csv");
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            };
+
+            // 列印 (另存 PDF)
+            const handlePrint = () => {
+                window.print();
+            };
+
+            return (
+                <div className="max-w-md mx-auto min-h-screen bg-gray-50 flex flex-col font-sans text-slate-800 relative print-container">
+                    
+                    {/* 列印用標題 (平常隱藏) */}
+                    <div className="hidden print-only print-header">
+                        <h1 className="text-2xl font-bold">京都之旅支出報表</h1>
+                        <p className="text-sm">公費剩餘: ¥{formatCurrency(stats.remaining)} | 個人支出: ¥{formatCurrency(stats.privateSpent)}</p>
                     </div>
-                  )}
 
-                  <div className="flex items-center gap-4">
-                    <div className={`p-3 rounded-full ${cat?.color} ${isPrivate ? 'opacity-80' : ''}`}>
-                      {cat?.icon}
+                    {/* 頂部總覽區 (列印時隱藏多餘背景) */}
+                    <div className="bg-slate-900 text-white p-6 rounded-b-3xl shadow-lg z-10 relative overflow-hidden shrink-0 no-print">
+                        <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none"><Icons.Wallet /></div>
+                        
+                        <div className="flex justify-between items-start mb-6 relative z-10">
+                            <div className="w-full">
+                                <div className="flex justify-between items-center">
+                                    <h1 className="text-xs text-amber-400 font-bold tracking-widest uppercase mb-1">公費餘額</h1>
+                                    <button onClick={() => setShowSettings(!showSettings)} className="text-slate-400 hover:text-white p-2 -mr-2"><Icons.Settings /></button>
+                                </div>
+                                <div className="flex items-baseline gap-2">
+                                    <span className={`text-4xl font-bold ${stats.remaining < 0 ? 'text-red-400' : 'text-white'}`}>¥ {formatCurrency(stats.remaining)}</span>
+                                    <span className="text-slate-400 text-xs">/ ¥{formatCurrency(initialBudget)}</span>
+                                </div>
+                                <div className="text-xs text-slate-400 mt-1">剩餘約 NT$ {formatCurrency(Math.round(stats.remaining * exchangeRate))}</div>
+                                <div className="mt-4 pt-3 border-t border-slate-700 flex justify-between items-center">
+                                    <div className="flex items-center gap-2 text-pink-300"><Icons.User /><span className="text-sm font-medium">個人總支出</span></div>
+                                    <span className="text-lg font-bold text-pink-300">¥ {formatCurrency(stats.privateSpent)}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* 設定與匯出面板 */}
+                        {showSettings && (
+                            <div className="bg-slate-800 p-4 rounded-xl mb-4 text-sm animate-pulse border border-slate-700 space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <label className="text-slate-300">初始公費預算 (JPY)</label>
+                                    <input type="number" value={initialBudget} onChange={(e) => setInitialBudget(Number(e.target.value))} className="w-24 p-1 bg-slate-700 text-white rounded text-center border border-slate-600" />
+                                </div>
+                                <div className="flex items-center justify-between">
+                                    <label className="text-slate-300">匯率 (JPY to TWD)</label>
+                                    <input type="number" step="0.001" value={exchangeRate} onChange={(e) => setExchangeRate(e.target.value)} className="w-24 p-1 bg-slate-700 text-white rounded text-center border border-slate-600" />
+                                </div>
+                                <div className="pt-2 border-t border-slate-600 flex gap-2">
+                                    <button onClick={exportToExcel} className="flex-1 bg-green-600 text-white py-2 rounded flex items-center justify-center gap-2 hover:bg-green-500">
+                                        <Icons.Download /> 匯出 Excel
+                                    </button>
+                                    <button onClick={handlePrint} className="flex-1 bg-blue-600 text-white py-2 rounded flex items-center justify-center gap-2 hover:bg-blue-500">
+                                        <Icons.Printer /> 存為 PDF
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="flex overflow-x-auto pb-2 gap-3 no-scrollbar snap-x pt-2">
+                            {itineraryDates.map((day, index) => (
+                                <button key={index} onClick={() => setSelectedDateIndex(index)} className={`flex-shrink-0 snap-start flex flex-col items-center justify-center p-2 w-16 rounded-xl transition-all border-2 ${selectedDateIndex === index ? 'bg-amber-400 border-amber-400 text-slate-900 shadow-lg translate-y-1' : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700'}`}>
+                                    <span className="text-xs font-bold">{day.date}</span>
+                                    <span className="text-[10px] opacity-80">{day.day}</span>
+                                </button>
+                            ))}
+                        </div>
                     </div>
-                    <div>
-                      <div className="font-bold text-slate-800">{expense.item}</div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-slate-400">{cat?.label}</span>
-                        {!isPrivate && <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 rounded">公費</span>}
-                      </div>
+
+                    {/* 主要內容區 */}
+                    <div className="flex-1 overflow-y-auto p-4 pb-32">
+                        <div className="flex items-center justify-between mb-4 px-1 no-print">
+                            <div>
+                                <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">{itineraryDates[selectedDateIndex].location}</h2>
+                                <p className="text-slate-500 text-xs flex items-center gap-1"><Icons.MapPin />{itineraryDates[selectedDateIndex].detail}</p>
+                            </div>
+                            <div className="text-right">
+                                <div className="text-[10px] text-slate-500 uppercase tracking-wide">Day Total</div>
+                                <div className="font-bold text-slate-700">¥ {formatCurrency(currentDayTotal)}</div>
+                            </div>
+                        </div>
+
+                        <div className="space-y-3">
+                            {currentDayExpenses.length === 0 ? (
+                                <div className="text-center py-12 text-slate-400 bg-white rounded-2xl border border-dashed border-slate-200 no-print">
+                                    <p>本日尚未有支出</p>
+                                </div>
+                            ) : (
+                                currentDayExpenses.map((expense) => {
+                                    const cat = categories.find(c => c.id === expense.category);
+                                    const isPrivate = expense.type === 'private';
+                                    return (
+                                        <div key={expense.id} className={`expense-card p-4 rounded-2xl shadow-sm border flex items-center justify-between group relative overflow-hidden ${isPrivate ? 'bg-pink-50 border-pink-100' : 'bg-white border-slate-100'}`}>
+                                            {isPrivate && <div className="absolute top-0 right-0 bg-pink-200 text-pink-700 text-[9px] px-2 py-0.5 rounded-bl-lg font-bold no-print">個人</div>}
+                                            <div className="flex items-center gap-4">
+                                                <div className={`p-3 rounded-full ${cat?.color} ${isPrivate ? 'opacity-80' : ''} no-print`}>{cat?.icon}</div>
+                                                <div>
+                                                    <div className="font-bold text-slate-800 flex items-center gap-2">
+                                                        {expense.item}
+                                                        {isPrivate && <span className="print-only text-xs text-pink-600">(私)</span>}
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-xs text-slate-400">{cat?.label}</span>
+                                                        {!isPrivate && <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 rounded no-print">公費</span>}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-3">
+                                                <div className="text-right">
+                                                    <div className={`font-bold ${isPrivate ? 'text-pink-600' : 'text-slate-800'}`}>¥ {formatCurrency(expense.amount)}</div>
+                                                    <div className="text-xs text-slate-400 no-print">NT$ {Math.round(expense.amount * exchangeRate)}</div>
+                                                </div>
+                                                <button onClick={() => handleDelete(expense.id)} className="text-slate-300 hover:text-red-500 p-2 no-print"><Icons.Trash /></button>
+                                            </div>
+                                        </div>
+                                    );
+                                })
+                            )}
+                        </div>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="text-right">
-                      <div className={`font-bold ${isPrivate ? 'text-pink-600' : 'text-slate-800'}`}>
-                        ¥ {formatCurrency(expense.amount)}
-                      </div>
-                      <div className="text-xs text-slate-400">NT$ {Math.round(expense.amount * exchangeRate)}</div>
+
+                    {/* 新增介面 (列印時隱藏) */}
+                    <div className={`fixed bottom-0 left-0 right-0 bg-white shadow-[0_-5px_30px_rgba(0,0,0,0.15)] rounded-t-3xl transition-all duration-300 z-50 no-print ${isAdding ? 'h-auto' : 'h-24'}`}>
+                        {!isAdding ? (
+                            <div className="flex justify-center p-4">
+                                <button onClick={() => setIsAdding(true)} className="bg-slate-900 text-white flex items-center gap-2 px-8 py-4 rounded-full shadow-lg hover:bg-slate-800 hover:scale-105 transition-all w-full max-w-xs justify-center text-lg font-bold">
+                                    <Icons.Plus /> 記一筆
+                                </button>
+                            </div>
+                        ) : (
+                            <form onSubmit={handleAddExpense} className="max-w-md mx-auto p-6 space-y-5">
+                                <div className="flex justify-between items-center">
+                                    <h3 className="font-bold text-slate-700 text-lg">新增支出</h3>
+                                    <button type="button" onClick={() => setIsAdding(false)} className="text-slate-400 hover:text-slate-600 p-2">取消</button>
+                                </div>
+                                <div className="bg-slate-100 p-1 rounded-xl flex relative">
+                                    <button type="button" onClick={() => setIsPersonal(false)} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all z-10 ${!isPersonal ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'}`}>🏢 公費支出</button>
+                                    <button type="button" onClick={() => setIsPersonal(true)} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all z-10 ${isPersonal ? 'bg-pink-500 text-white shadow-sm' : 'text-slate-500'}`}>👤 個人支出</button>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="text-xs font-bold text-slate-500 ml-1 mb-1 block">金額 (¥)</label>
+                                        <input type="number" value={newAmount} onChange={(e) => setNewAmount(e.target.value)} placeholder="0" className="w-full pl-3 pr-3 py-3 bg-slate-50 rounded-xl border-2 border-transparent focus:border-slate-900 focus:outline-none text-xl font-bold text-slate-800" autoFocus />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-bold text-slate-500 ml-1 mb-1 block">項目</label>
+                                        <input type="text" value={newItem} onChange={(e) => setNewItem(e.target.value)} placeholder="例：計程車" className="w-full px-4 py-3 bg-slate-50 rounded-xl border-2 border-transparent focus:border-slate-900 focus:outline-none text-slate-800" />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="text-xs font-bold text-slate-500 ml-1 mb-2 block">分類</label>
+                                    <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
+                                        {categories.map((cat) => (
+                                            <button key={cat.id} type="button" onClick={() => setNewCategory(cat.id)} className={`flex flex-col items-center justify-center p-3 w-16 h-16 rounded-xl border-2 transition-all shrink-0 ${newCategory === cat.id ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-400 border-slate-100 hover:border-slate-300'}`}>
+                                                {cat.icon}
+                                                <span className="text-[10px] mt-1">{cat.label}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                                <button type="submit" className={`w-full text-white font-bold py-4 rounded-xl active:scale-95 transition-all shadow-md mt-2 ${isPersonal ? 'bg-pink-500 hover:bg-pink-600' : 'bg-slate-900 hover:bg-slate-800'}`}>確認儲存 {isPersonal ? '(個人)' : '(公費)'}</button>
+                            </form>
+                        )}
                     </div>
-                    <button 
-                      onClick={() => handleDelete(expense.id)}
-                      className="text-slate-300 hover:text-red-500 p-2 opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
                 </div>
-              );
-            })
-          )}
-        </div>
-      </div>
+            );
+        };
 
-      {/* 新增介面 */}
-      <div className={`fixed bottom-0 left-0 right-0 bg-white shadow-[0_-5px_30px_rgba(0,0,0,0.15)] rounded-t-3xl transition-all duration-300 z-50 ${isAdding ? 'h-auto' : 'h-24'}`}>
-        {!isAdding ? (
-          <div className="flex justify-center p-4">
-            <button 
-              onClick={() => setIsAdding(true)}
-              className="bg-slate-900 text-white flex items-center gap-2 px-8 py-4 rounded-full shadow-lg hover:bg-slate-800 hover:scale-105 transition-all w-full max-w-xs justify-center text-lg font-bold"
-            >
-              <Plus size={24} /> 記一筆
-            </button>
-          </div>
-        ) : (
-          <form onSubmit={handleAddExpense} className="max-w-md mx-auto p-6 space-y-5">
-            <div className="flex justify-between items-center">
-              <h3 className="font-bold text-slate-700 text-lg">新增支出</h3>
-              <button 
-                type="button" 
-                onClick={() => setIsAdding(false)}
-                className="text-slate-400 hover:text-slate-600 p-2"
-              >
-                取消
-              </button>
-            </div>
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
 
-            {/* 公費/個人 切換開關 */}
-            <div className="bg-slate-100 p-1 rounded-xl flex relative">
-              <button
-                type="button"
-                onClick={() => setIsPersonal(false)}
-                className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all z-10 ${!isPersonal ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'}`}
-              >
-                🏢 公費支出
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsPersonal(true)}
-                className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all z-10 ${isPersonal ? 'bg-pink-500 text-white shadow-sm' : 'text-slate-500'}`}
-              >
-                👤 個人支出
-              </button>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-xs font-bold text-slate-500 ml-1 mb-1 block">金額 (¥)</label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    value={newAmount}
-                    onChange={(e) => setNewAmount(e.target.value)}
-                    placeholder="0"
-                    className="w-full pl-3 pr-3 py-3 bg-slate-50 rounded-xl border-2 border-transparent focus:border-slate-900 focus:outline-none text-xl font-bold text-slate-800"
-                    autoFocus
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="text-xs font-bold text-slate-500 ml-1 mb-1 block">項目</label>
-                <input
-                  type="text"
-                  value={newItem}
-                  onChange={(e) => setNewItem(e.target.value)}
-                  placeholder="例：計程車"
-                  className="w-full px-4 py-3 bg-slate-50 rounded-xl border-2 border-transparent focus:border-slate-900 focus:outline-none text-slate-800"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="text-xs font-bold text-slate-500 ml-1 mb-2 block">分類</label>
-              <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
-                {categories.map((cat) => (
-                  <button
-                    key={cat.id}
-                    type="button"
-                    onClick={() => setNewCategory(cat.id)}
-                    className={`flex flex-col items-center justify-center p-3 w-16 h-16 rounded-xl border-2 transition-all shrink-0 ${
-                      newCategory === cat.id 
-                        ? 'bg-slate-800 text-white border-slate-800' 
-                        : 'bg-white text-slate-400 border-slate-100 hover:border-slate-300'
-                    }`}
-                  >
-                    {cat.icon}
-                    <span className="text-[10px] mt-1">{cat.label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <button 
-              type="submit"
-              className={`w-full text-white font-bold py-4 rounded-xl active:scale-95 transition-all shadow-md mt-2 ${isPersonal ? 'bg-pink-500 hover:bg-pink-600' : 'bg-slate-900 hover:bg-slate-800'}`}
-            >
-              確認儲存 {isPersonal ? '(個人)' : '(公費)'}
-            </button>
-          </form>
-        )}
-      </div>
-    </div>
-  );
-};
-
-export default KyotoExpenseTracker;
 
