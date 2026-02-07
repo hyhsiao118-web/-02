@@ -37,7 +37,7 @@
     <script type="text/babel">
         const { useState, useMemo, useEffect } = React;
 
-        // --- SVG 圖示組件 (避免外部依賴) ---
+        // --- SVG 圖示組件 ---
         const Icon = ({ children, className }) => (
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
                 {children}
@@ -58,7 +58,8 @@
             Wallet: () => <Icon className="w-32 h-32"><path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/></Icon>,
             User: () => <Icon className="w-3 h-3"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></Icon>,
             Download: () => <Icon className="w-4 h-4"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></Icon>,
-            Printer: () => <Icon className="w-4 h-4"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></Icon>
+            Printer: () => <Icon className="w-4 h-4"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></Icon>,
+            PlusCircle: () => <Icon className="w-4 h-4"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></Icon>
         };
 
         const App = () => {
@@ -81,6 +82,7 @@
             const [showSettings, setShowSettings] = useState(false);
             const [selectedDateIndex, setSelectedDateIndex] = useState(0);
             const [isAdding, setIsAdding] = useState(false);
+            const [addBudgetAmount, setAddBudgetAmount] = useState(''); // 新增：追加金額輸入框
 
             // 表單狀態
             const [newItem, setNewItem] = useState('');
@@ -147,17 +149,25 @@
                 if(confirm('確定要刪除這筆紀錄嗎？')) setExpenses(expenses.filter(item => item.id !== id));
             };
 
+            const handleAddToBudget = () => {
+                const amount = Number(addBudgetAmount);
+                if (amount > 0) {
+                    if(confirm(`確認要增加 ¥${amount} 到公費預算嗎？`)) {
+                        setInitialBudget(prev => prev + amount);
+                        setAddBudgetAmount('');
+                    }
+                }
+            };
+
             const formatCurrency = (amount) => new Intl.NumberFormat('ja-JP').format(amount);
 
             // 匯出 CSV (Excel)
             const exportToExcel = () => {
-                // 加入 BOM \uFEFF 讓 Excel 能正確識別中文編碼
                 let csvContent = "\uFEFF日期,項目,金額(JPY),換算(TWD),類型,分類\n";
                 expenses.forEach(e => {
                     const catName = categories.find(c => c.id === e.category)?.label || e.category;
                     const typeName = e.type === 'public' ? '公費' : '個人';
                     const twd = Math.round(e.amount * exchangeRate);
-                    // 確保逗號不會破壞格式
                     const safeItem = `"${e.item.replace(/"/g, '""')}"`; 
                     csvContent += `${e.date},${safeItem},${e.amount},${twd},${typeName},${catName}\n`;
                 });
@@ -186,7 +196,7 @@
                         <p className="text-sm">公費剩餘: ¥{formatCurrency(stats.remaining)} | 個人支出: ¥{formatCurrency(stats.privateSpent)}</p>
                     </div>
 
-                    {/* 頂部總覽區 (列印時隱藏多餘背景) */}
+                    {/* 頂部總覽區 */}
                     <div className="bg-slate-900 text-white p-6 rounded-b-3xl shadow-lg z-10 relative overflow-hidden shrink-0 no-print">
                         <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none"><Icons.Wallet /></div>
                         
@@ -194,7 +204,7 @@
                             <div className="w-full">
                                 <div className="flex justify-between items-center">
                                     <h1 className="text-xs text-amber-400 font-bold tracking-widest uppercase mb-1">公費餘額</h1>
-                                    <button onClick={() => setShowSettings(!showSettings)} className="text-slate-400 hover:text-white p-2 -mr-2"><Icons.Settings /></button>
+                                    <button onClick={() => setShowSettings(!showSettings)} className={`p-2 -mr-2 transition-colors ${showSettings ? 'text-amber-400' : 'text-slate-400 hover:text-white'}`}><Icons.Settings /></button>
                                 </div>
                                 <div className="flex items-baseline gap-2">
                                     <span className={`text-4xl font-bold ${stats.remaining < 0 ? 'text-red-400' : 'text-white'}`}>¥ {formatCurrency(stats.remaining)}</span>
@@ -210,20 +220,47 @@
 
                         {/* 設定與匯出面板 */}
                         {showSettings && (
-                            <div className="bg-slate-800 p-4 rounded-xl mb-4 text-sm animate-pulse border border-slate-700 space-y-3">
-                                <div className="flex items-center justify-between">
-                                    <label className="text-slate-300">初始公費預算 (JPY)</label>
-                                    <input type="number" value={initialBudget} onChange={(e) => setInitialBudget(Number(e.target.value))} className="w-24 p-1 bg-slate-700 text-white rounded text-center border border-slate-600" />
+                            <div className="bg-slate-800 p-4 rounded-xl mb-4 text-sm animate-pulse border border-slate-700 space-y-4">
+                                
+                                {/* 1. 追加預算區塊 */}
+                                <div className="bg-slate-700/50 p-3 rounded-lg border border-slate-600">
+                                    <label className="text-amber-400 text-xs font-bold mb-2 flex items-center gap-1"><Icons.PlusCircle /> 追加公費 (媽媽贊助)</label>
+                                    <div className="flex gap-2">
+                                        <input 
+                                            type="number" 
+                                            placeholder="輸入追加金額" 
+                                            value={addBudgetAmount}
+                                            onChange={(e) => setAddBudgetAmount(e.target.value)}
+                                            className="flex-1 p-2 bg-slate-900 text-white rounded text-sm outline-none focus:ring-1 focus:ring-amber-400 border border-slate-600" 
+                                        />
+                                        <button 
+                                            onClick={handleAddToBudget} 
+                                            className="bg-amber-500 text-slate-900 px-4 py-1 rounded font-bold text-sm hover:bg-amber-400 disabled:opacity-50"
+                                            disabled={!addBudgetAmount}
+                                        >
+                                            追加
+                                        </button>
+                                    </div>
                                 </div>
-                                <div className="flex items-center justify-between">
-                                    <label className="text-slate-300">匯率 (JPY to TWD)</label>
-                                    <input type="number" step="0.001" value={exchangeRate} onChange={(e) => setExchangeRate(e.target.value)} className="w-24 p-1 bg-slate-700 text-white rounded text-center border border-slate-600" />
+
+                                {/* 2. 基本設定區塊 */}
+                                <div className="space-y-3 pt-2">
+                                    <div className="flex items-center justify-between">
+                                        <label className="text-slate-300">目前公費總額 (JPY)</label>
+                                        <input type="number" value={initialBudget} onChange={(e) => setInitialBudget(Number(e.target.value))} className="w-24 p-1 bg-slate-700 text-white rounded text-center border border-slate-600 focus:outline-none focus:border-slate-400" />
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                        <label className="text-slate-300">匯率 (JPY to TWD)</label>
+                                        <input type="number" step="0.001" value={exchangeRate} onChange={(e) => setExchangeRate(e.target.value)} className="w-24 p-1 bg-slate-700 text-white rounded text-center border border-slate-600 focus:outline-none focus:border-slate-400" />
+                                    </div>
                                 </div>
+
+                                {/* 3. 匯出按鈕區塊 */}
                                 <div className="pt-2 border-t border-slate-600 flex gap-2">
-                                    <button onClick={exportToExcel} className="flex-1 bg-green-600 text-white py-2 rounded flex items-center justify-center gap-2 hover:bg-green-500">
+                                    <button onClick={exportToExcel} className="flex-1 bg-green-600 text-white py-2 rounded flex items-center justify-center gap-2 hover:bg-green-500 transition-colors">
                                         <Icons.Download /> 匯出 Excel
                                     </button>
-                                    <button onClick={handlePrint} className="flex-1 bg-blue-600 text-white py-2 rounded flex items-center justify-center gap-2 hover:bg-blue-500">
+                                    <button onClick={handlePrint} className="flex-1 bg-blue-600 text-white py-2 rounded flex items-center justify-center gap-2 hover:bg-blue-500 transition-colors">
                                         <Icons.Printer /> 存為 PDF
                                     </button>
                                 </div>
@@ -292,7 +329,7 @@
                         </div>
                     </div>
 
-                    {/* 新增介面 (列印時隱藏) */}
+                    {/* 新增介面 */}
                     <div className={`fixed bottom-0 left-0 right-0 bg-white shadow-[0_-5px_30px_rgba(0,0,0,0.15)] rounded-t-3xl transition-all duration-300 z-50 no-print ${isAdding ? 'h-auto' : 'h-24'}`}>
                         {!isAdding ? (
                             <div className="flex justify-center p-4">
