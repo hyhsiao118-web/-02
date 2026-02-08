@@ -60,7 +60,8 @@
             Download: () => <Icon className="w-4 h-4"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></Icon>,
             Printer: () => <Icon className="w-4 h-4"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></Icon>,
             PlusCircle: () => <Icon className="w-4 h-4"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></Icon>,
-            CreditCard: () => <Icon className="w-3 h-3"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></Icon>
+            CreditCard: () => <Icon className="w-3 h-3"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></Icon>,
+            Edit: () => <Icon className="w-3 h-3"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></Icon>
         };
 
         const App = () => {
@@ -69,7 +70,7 @@
             const [initialBudget, setInitialBudget] = useState(() => parseFloat(localStorage.getItem('kyoto_initialBudget')) || 100000);
             
             // type: 'public' (公費現金), 'advance' (代墊公費), 'private' (個人自費)
-            // 這裡已經更新為你 2/8 的實際支出資料
+            // 2/8 資料
             const defaultExpenses = [
                 { id: 1, date: '2/8', item: 'JR(往京都)', amount: 14360, category: 'transport', type: 'public' },
                 { id: 2, date: '2/8', item: '中-午餐', amount: 6820, category: 'food', type: 'public' },
@@ -83,9 +84,6 @@
 
             const [expenses, setExpenses] = useState(() => {
                 const saved = localStorage.getItem('kyoto_expenses');
-                // 如果是第一次使用（localStorage 沒資料），就用上面的 defaultExpenses
-                // 如果已經有資料，但你想要強制更新成 2/8 的資料，請手動清除瀏覽器快取或使用這行：
-                // return defaultExpenses; 
                 return saved ? JSON.parse(saved) : defaultExpenses;
             });
 
@@ -129,20 +127,13 @@
 
             // 統計邏輯
             const stats = useMemo(() => {
-                // 公費現金支出 (真正從信封拿錢的)
                 const publicCashSpent = expenses.filter(e => e.type === 'public').reduce((sum, item) => sum + Number(item.amount), 0);
-                // 代墊公費 (先刷卡但算公費的)
                 const advanceSpent = expenses.filter(e => e.type === 'advance').reduce((sum, item) => sum + Number(item.amount), 0);
-                // 個人支出
                 const privateSpent = expenses.filter(e => e.type === 'private').reduce((sum, item) => sum + Number(item.amount), 0);
-                
-                // 公費現金餘額 = 總預算 - 公費現金支出 (代墊不扣現金)
                 const cashRemaining = initialBudget - publicCashSpent;
-
                 return { publicCashSpent, advanceSpent, privateSpent, cashRemaining };
             }, [expenses, initialBudget]);
 
-            // 每日小計 (只算 公費 + 代墊，不算個人)
             const currentDayExpenses = useMemo(() => expenses.filter(item => item.date === itineraryDates[selectedDateIndex].date), [expenses, selectedDateIndex]);
             const currentDayTotal = useMemo(() => 
                 currentDayExpenses
@@ -171,13 +162,22 @@
                 if(confirm('確定要刪除這筆紀錄嗎？')) setExpenses(expenses.filter(item => item.id !== id));
             };
 
-            const handleAddToBudget = () => {
+            // 追加公費功能 (修復版)
+            const handleAddToBudget = (e) => {
+                e.preventDefault(); // 防止表單提交或頁面刷新
+                e.stopPropagation(); // 停止事件冒泡
+                
                 const amount = Number(addBudgetAmount);
                 if (amount > 0) {
-                    if(confirm(`確認要增加 ¥${amount} 到公費預算嗎？`)) {
-                        setInitialBudget(prev => prev + amount);
-                        setAddBudgetAmount('');
-                    }
+                    // 使用 setTimeout 確保 UI 渲染不會卡住 confirm
+                    setTimeout(() => {
+                        if(window.confirm(`確認要增加 ¥${amount} 到公費預算嗎？`)) {
+                            setInitialBudget(prev => prev + amount);
+                            setAddBudgetAmount('');
+                        }
+                    }, 50);
+                } else {
+                    alert("請輸入有效的金額！");
                 }
             };
 
@@ -190,7 +190,6 @@
                     let typeName = '公費現金';
                     if (e.type === 'advance') typeName = '代墊公費';
                     if (e.type === 'private') typeName = '個人自費';
-                    
                     const twd = Math.round(e.amount * exchangeRate);
                     const safeItem = `"${e.item.replace(/"/g, '""')}"`; 
                     csvContent += `${e.date},${safeItem},${e.amount},${twd},${typeName},${catName}\n`;
@@ -232,15 +231,11 @@
                                 
                                 <div className="mt-4 pt-3 border-t border-slate-700 grid grid-cols-2 gap-4">
                                     <div className="flex flex-col">
-                                        <div className="flex items-center gap-1 text-blue-300 text-xs mb-1">
-                                            <Icons.CreditCard /> 代墊公費 (待請款)
-                                        </div>
+                                        <div className="flex items-center gap-1 text-blue-300 text-xs mb-1"><Icons.CreditCard /> 代墊公費 (待請款)</div>
                                         <span className="text-lg font-bold text-blue-300">¥ {formatCurrency(stats.advanceSpent)}</span>
                                     </div>
                                     <div className="flex flex-col text-right">
-                                        <div className="flex items-center justify-end gap-1 text-pink-300 text-xs mb-1">
-                                            <Icons.User /> 個人自費總計
-                                        </div>
+                                        <div className="flex items-center justify-end gap-1 text-pink-300 text-xs mb-1"><Icons.User /> 個人自費總計</div>
                                         <span className="text-lg font-bold text-pink-300">¥ {formatCurrency(stats.privateSpent)}</span>
                                     </div>
                                 </div>
@@ -249,17 +244,49 @@
 
                         {showSettings && (
                             <div className="bg-slate-800 p-4 rounded-xl mb-4 text-sm animate-pulse border border-slate-700 space-y-4">
+                                
+                                {/* 1. 追加預算區塊 */}
                                 <div className="bg-slate-700/50 p-3 rounded-lg border border-slate-600">
                                     <label className="text-amber-400 text-xs font-bold mb-2 flex items-center gap-1"><Icons.PlusCircle /> 追加公費 (媽媽贊助)</label>
                                     <div className="flex gap-2">
-                                        <input type="number" placeholder="金額" value={addBudgetAmount} onChange={(e) => setAddBudgetAmount(e.target.value)} className="flex-1 p-2 bg-slate-900 text-white rounded text-sm outline-none border border-slate-600" />
-                                        <button onClick={handleAddToBudget} className="bg-amber-500 text-slate-900 px-4 py-1 rounded font-bold text-sm hover:bg-amber-400 disabled:opacity-50" disabled={!addBudgetAmount}>追加</button>
+                                        <input 
+                                            type="number" 
+                                            placeholder="輸入金額" 
+                                            value={addBudgetAmount} 
+                                            onChange={(e) => setAddBudgetAmount(e.target.value)} 
+                                            className="flex-1 p-2 bg-slate-900 text-white rounded text-sm outline-none border border-slate-600" 
+                                        />
+                                        <button 
+                                            type="button"
+                                            onClick={handleAddToBudget} 
+                                            className="bg-amber-500 text-slate-900 px-4 py-1 rounded font-bold text-sm hover:bg-amber-400 disabled:opacity-50" 
+                                            disabled={!addBudgetAmount}
+                                        >
+                                            追加
+                                        </button>
                                     </div>
                                 </div>
+
+                                {/* 2. 修正與設定區塊 */}
                                 <div className="space-y-3 pt-2">
-                                    <div className="flex items-center justify-between"><label className="text-slate-300">目前公費總額</label><input type="number" value={initialBudget} onChange={(e) => setInitialBudget(Number(e.target.value))} className="w-24 p-1 bg-slate-700 text-white rounded text-center border border-slate-600" /></div>
-                                    <div className="flex items-center justify-between"><label className="text-slate-300">匯率</label><input type="number" step="0.001" value={exchangeRate} onChange={(e) => setExchangeRate(e.target.value)} className="w-24 p-1 bg-slate-700 text-white rounded text-center border border-slate-600" /></div>
+                                    <div className="flex items-center justify-between">
+                                        <label className="text-slate-300 flex items-center gap-1">
+                                            <Icons.Edit /> 修正公費總額
+                                            <span className="text-[10px] text-slate-500 ml-1">(加錯可直接改)</span>
+                                        </label>
+                                        <input 
+                                            type="number" 
+                                            value={initialBudget} 
+                                            onChange={(e) => setInitialBudget(Number(e.target.value))} 
+                                            className="w-28 p-1 bg-slate-700 text-white rounded text-center border border-slate-600 focus:ring-1 focus:ring-amber-400" 
+                                        />
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                        <label className="text-slate-300">匯率 (JPY to TWD)</label>
+                                        <input type="number" step="0.001" value={exchangeRate} onChange={(e) => setExchangeRate(e.target.value)} className="w-28 p-1 bg-slate-700 text-white rounded text-center border border-slate-600" />
+                                    </div>
                                 </div>
+
                                 <div className="pt-2 border-t border-slate-600 flex gap-2">
                                     <button onClick={exportToExcel} className="flex-1 bg-green-600 text-white py-2 rounded flex items-center justify-center gap-2 hover:bg-green-500"><Icons.Download /> 匯出 Excel</button>
                                     <button onClick={handlePrint} className="flex-1 bg-blue-600 text-white py-2 rounded flex items-center justify-center gap-2 hover:bg-blue-500"><Icons.Printer /> 存為 PDF</button>
